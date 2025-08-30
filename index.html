@@ -84,13 +84,22 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
-        // Global variables provided by the canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzDWUfa6ICGa723OoTuQLIL08gTmF6sRU",
+            authDomain: "formula-student-log.firebaseapp.com",
+            projectId: "formula-student-log",
+            storageBucket: "formula-student-log.firebasestorage.app",
+            messagingSenderId: "261901290767",
+            appId: "1:261901290767:web:ce236fc26f79d25ef3027a",
+            measurementId: "G-E5VFYLP4P1"
+        };
+        
+        const appId = firebaseConfig.projectId || 'default-app-id'; // Use projectId as appId
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let db = null;
@@ -149,14 +158,21 @@
                 });
 
                 if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
+                    try {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        console.log("Signed in with custom token.");
+                    } catch (e) {
+                        console.warn("Custom token sign-in failed. Falling back to anonymous sign-in.", e);
+                        // Fallback to anonymous sign-in if the custom token fails
+                        await signInAnonymously(auth);
+                    }
                 } else {
                     await signInAnonymously(auth);
                 }
 
             } catch (error) {
-                console.error("Firebase initialization or authentication failed: ", error);
-                authStatusEl.textContent = `Authentication error: ${error.message}`;
+                console.error("Firebase initialization failed: ", error);
+                authStatusEl.textContent = `Error: ${error.message}`;
             }
         };
 
