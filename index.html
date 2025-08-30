@@ -19,7 +19,6 @@
             <h1 class="text-3xl font-bold text-gray-800">Track Marshal Log</h1>
             <p id="auth-status" class="text-sm text-gray-500 mt-2"></p>
         </header>
-
         <div id="loading-indicator" class="flex flex-col items-center justify-center space-y-2 text-gray-500">
             <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -27,7 +26,6 @@
             </svg>
             <span class="text-sm">Loading...</span>
         </div>
-
         <div id="main-content" class="hidden">
             <!-- Team Selection and Entry -->
             <div class="space-y-4">
@@ -39,9 +37,7 @@
                     Log Entry Time
                 </button>
             </div>
-
             <hr class="my-6 border-t border-gray-200">
-
             <!-- Dynamic Event Logging -->
             <div class="space-y-4">
                 <h2 class="text-xl font-bold text-gray-800">Log Run Time</h2>
@@ -64,9 +60,7 @@
                     Log Run Time
                 </button>
             </div>
-
             <hr class="my-6 border-t border-gray-200">
-
             <!-- Data Display and Download -->
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -82,12 +76,10 @@
             </div>
         </div>
     </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
-
         // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyBzDWUfa6ICGa723OoTuQLIL08gTmF6sRU",
@@ -98,20 +90,17 @@
             appId: "1:261901290767:web:ce236fc26f79d25ef3027a",
             measurementId: "G-E5VFYLP4P1"
         };
-        
+
         const appId = firebaseConfig.projectId || 'default-app-id'; // Use projectId as appId
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
         let db = null;
         let auth = null;
         let userId = null;
         let isAuthReady = false;
-
         const teams = [
             "E05", "E11", "E76", "E77", "E88"
         ];
         const logCollectionName = "track_logs";
-
         // UI Elements
         const authStatusEl = document.getElementById('auth-status');
         const loadingIndicatorEl = document.getElementById('loading-indicator');
@@ -124,7 +113,6 @@
         const logListEl = document.getElementById('log-list');
         const downloadBtn = document.getElementById('download-btn');
         const noDataMessage = document.getElementById('no-data-message');
-
         // Populate team select dropdown
         teams.forEach(team => {
             const option = document.createElement('option');
@@ -132,21 +120,19 @@
             option.textContent = team;
             teamSelectEl.appendChild(option);
         });
-
         const initFirebase = async () => {
             try {
                 console.log("Initializing Firebase app...");
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                
+
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         authStatusEl.textContent = `Authenticated as User ID: ${userId}`;
                         console.log("Authentication successful. User ID:", userId);
                     } else {
-                        // This case is unlikely due to custom token, but good practice
                         userId = null;
                         authStatusEl.textContent = 'Not authenticated.';
                         console.log("Authentication failed. No user found.");
@@ -156,51 +142,43 @@
                     mainContentEl.classList.remove('hidden');
                     setupRealtimeListener();
                 });
-
                 if (initialAuthToken) {
                     try {
                         await signInWithCustomToken(auth, initialAuthToken);
                         console.log("Signed in with custom token.");
                     } catch (e) {
                         console.warn("Custom token sign-in failed. Falling back to anonymous sign-in.", e);
-                        // Fallback to anonymous sign-in if the custom token fails
                         await signInAnonymously(auth);
                     }
                 } else {
                     await signInAnonymously(auth);
                 }
-
             } catch (error) {
                 console.error("Firebase initialization failed: ", error);
                 authStatusEl.textContent = `Error: ${error.message}`;
             }
         };
-
         const setupRealtimeListener = () => {
             if (!isAuthReady || !db || !auth.currentUser) {
                 console.warn("Realtime listener setup aborted. Auth not ready or no user.");
                 return;
             }
-
-            const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+            // NO leading slash!
+            const logsCollectionPath = `artifacts/${appId}/public/data/${logCollectionName}`;
             console.log("Setting up listener on collection:", logsCollectionPath);
             const q = query(collection(db, logsCollectionPath));
-
             onSnapshot(q, (snapshot) => {
                 const logs = [];
                 snapshot.forEach(doc => {
                     logs.push({ id: doc.id, ...doc.data() });
                 });
-                
-                // Sort the logs by timestamp in descending order
+
                 logs.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
-                
                 displayLogs(logs);
             }, (error) => {
                 console.error("Error fetching logs: ", error);
             });
         };
-
         const displayLogs = (logs) => {
             logListEl.innerHTML = '';
             if (logs.length === 0) {
@@ -221,10 +199,8 @@
                 });
             }
         };
-
         const handleEntry = async () => {
             if (!isAuthReady || !db) return;
-
             const selectedTeam = teamSelectEl.value;
             if (!selectedTeam) {
                 console.error("Please select a team.");
@@ -232,7 +208,8 @@
             }
             console.log("Attempting to log entry for team:", selectedTeam);
             try {
-                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                // NO leading slash!
+                const logsCollectionPath = `artifacts/${appId}/public/data/${logCollectionName}`;
                 await addDoc(collection(db, logsCollectionPath), {
                     teamName: selectedTeam,
                     event: 'Entry',
@@ -245,21 +222,19 @@
                 console.error("Error adding document: ", e);
             }
         };
-
         const handleLogRun = async () => {
             if (!isAuthReady || !db) return;
-
             const selectedTeam = teamSelectEl.value;
             const selectedEvent = eventSelectEl.value;
             const runNumber = parseInt(runNumberSelect.value, 10);
-
             if (!selectedTeam || !selectedEvent || isNaN(runNumber)) {
                 console.error("Please select a team, an event, and a valid run number.");
                 return;
             }
             console.log("Attempting to log run for team:", selectedTeam, "event:", selectedEvent, "run number:", runNumber);
             try {
-                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                // NO leading slash!
+                const logsCollectionPath = `artifacts/${appId}/public/data/${logCollectionName}`;
                 await addDoc(collection(db, logsCollectionPath), {
                     teamName: selectedTeam,
                     event: selectedEvent,
@@ -272,18 +247,15 @@
                 console.error("Error adding document: ", e);
             }
         };
-
         const handleDownloadCSV = async () => {
             if (!isAuthReady || !db) return;
-
             try {
-                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                // NO leading slash!
+                const logsCollectionPath = `artifacts/${appId}/public/data/${logCollectionName}`;
                 const q = query(collection(db, logsCollectionPath));
                 const querySnapshot = await getDocs(q);
-
                 let csvContent = "data:text/csv;charset=utf-8,";
                 csvContent += "Team,Event,Run Number,Timestamp\n";
-
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     const teamName = data.teamName || 'N/A';
@@ -292,12 +264,11 @@
                     const timestamp = data.timestamp?.toDate ? data.timestamp.toDate().toLocaleString() : 'N/A';
                     csvContent += `"${teamName}","${event}","${runNumber}","${timestamp}"\n`;
                 });
-
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
                 link.setAttribute("download", `track_log_${new Date().toISOString()}.csv`);
-                document.body.appendChild(link); // Required for Firefox
+                document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
             } catch (e) {
@@ -305,12 +276,9 @@
             }
         };
 
-        // Event Listeners
         entryBtn.addEventListener('click', handleEntry);
         logRunBtn.addEventListener('click', handleLogRun);
         downloadBtn.addEventListener('click', handleDownloadCSV);
-
-        // Initialize the app
         initFirebase();
     </script>
 </body>
