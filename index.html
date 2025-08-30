@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Marshal Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div id="app" class="w-full max-w-lg bg-white rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Track Marshal Log</h1>
+            <p id="auth-status" class="text-sm text-gray-500 mt-2"></p>
+        </header>
+
+        <div id="loading-indicator" class="flex flex-col items-center justify-center space-y-2 text-gray-500">
+            <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-sm">Loading...</span>
+        </div>
+
+        <div id="main-content" class="hidden">
+            <!-- Team Selection and Entry -->
+            <div class="space-y-4">
+                <label for="team-select" class="block text-sm font-medium text-gray-700">Select Team</label>
+                <select id="team-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <!-- Options will be added by JavaScript -->
+                </select>
+                <button id="entry-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-blue-700 transition duration-200 ease-in-out">
+                    Log Entry Time
+                </button>
+            </div>
+
+            <hr class="my-6 border-t border-gray-200">
+
+            <!-- Dynamic Event Logging -->
+            <div class="space-y-4">
+                <h2 class="text-xl font-bold text-gray-800">Log Run Time</h2>
+                <label for="event-select" class="block text-sm font-medium text-gray-700">Select Dynamic Event</label>
+                <select id="event-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="Autocross">Autocross</option>
+                    <option value="Skidpad">Skidpad</option>
+                    <option value="Acceleration">Acceleration</option>
+                    <option value="Endurance">Endurance</option>
+                </select>
+                <label for="run-number-select" class="block text-sm font-medium text-gray-700">Run Number</label>
+                <select id="run-number-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+                <button id="log-run-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-green-700 transition duration-200 ease-in-out">
+                    Log Run Time
+                </button>
+            </div>
+
+            <hr class="my-6 border-t border-gray-200">
+
+            <!-- Data Display and Download -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold text-gray-800">Recent Logs</h2>
+                    <button id="download-btn" class="bg-gray-500 text-white font-medium py-2 px-4 rounded-lg shadow-md hover:bg-gray-600 transition duration-200 ease-in-out">
+                        Download CSV
+                    </button>
+                </div>
+                <div id="log-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Logs will be displayed here -->
+                </div>
+                <div id="no-data-message" class="hidden text-center text-gray-500 text-sm">No log entries yet.</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db = null;
+        let auth = null;
+        let userId = null;
+        let isAuthReady = false;
+
+        const teams = [
+            "E05", "E11", "E76", "E77", "E88"
+        ];
+        const logCollectionName = "track_logs";
+
+        // UI Elements
+        const authStatusEl = document.getElementById('auth-status');
+        const loadingIndicatorEl = document.getElementById('loading-indicator');
+        const mainContentEl = document.getElementById('main-content');
+        const teamSelectEl = document.getElementById('team-select');
+        const entryBtn = document.getElementById('entry-btn');
+        const eventSelectEl = document.getElementById('event-select');
+        const runNumberSelect = document.getElementById('run-number-select');
+        const logRunBtn = document.getElementById('log-run-btn');
+        const logListEl = document.getElementById('log-list');
+        const downloadBtn = document.getElementById('download-btn');
+        const noDataMessage = document.getElementById('no-data-message');
+
+        // Populate team select dropdown
+        teams.forEach(team => {
+            const option = document.createElement('option');
+            option.value = team;
+            option.textContent = team;
+            teamSelectEl.appendChild(option);
+        });
+
+        const initFirebase = async () => {
+            try {
+                console.log("Initializing Firebase app...");
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        authStatusEl.textContent = `Authenticated as User ID: ${userId}`;
+                        console.log("Authentication successful. User ID:", userId);
+                    } else {
+                        // This case is unlikely due to custom token, but good practice
+                        userId = null;
+                        authStatusEl.textContent = 'Not authenticated.';
+                        console.log("Authentication failed. No user found.");
+                    }
+                    isAuthReady = true;
+                    loadingIndicatorEl.classList.add('hidden');
+                    mainContentEl.classList.remove('hidden');
+                    setupRealtimeListener();
+                });
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase initialization or authentication failed: ", error);
+                authStatusEl.textContent = `Authentication error: ${error.message}`;
+            }
+        };
+
+        const setupRealtimeListener = () => {
+            if (!isAuthReady || !db || !auth.currentUser) {
+                console.warn("Realtime listener setup aborted. Auth not ready or no user.");
+                return;
+            }
+
+            const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+            console.log("Setting up listener on collection:", logsCollectionPath);
+            const q = query(collection(db, logsCollectionPath));
+
+            onSnapshot(q, (snapshot) => {
+                const logs = [];
+                snapshot.forEach(doc => {
+                    logs.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sort the logs by timestamp in descending order
+                logs.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                
+                displayLogs(logs);
+            }, (error) => {
+                console.error("Error fetching logs: ", error);
+            });
+        };
+
+        const displayLogs = (logs) => {
+            logListEl.innerHTML = '';
+            if (logs.length === 0) {
+                noDataMessage.classList.remove('hidden');
+            } else {
+                noDataMessage.classList.add('hidden');
+                logs.forEach(log => {
+                    const logItem = document.createElement('div');
+                    logItem.className = "bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200";
+                    const timestamp = log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString() : 'N/A';
+                    logItem.innerHTML = `
+                        <p class="text-sm text-gray-700"><strong>Team:</strong> ${log.teamName}</p>
+                        <p class="text-sm text-gray-700"><strong>Event:</strong> ${log.event}</p>
+                        <p class="text-sm text-gray-700"><strong>Run Number:</strong> ${log.runNumber || 'N/A'}</p>
+                        <p class="text-xs text-gray-500 mt-1"><strong>Logged At:</strong> ${timestamp}</p>
+                    `;
+                    logListEl.appendChild(logItem);
+                });
+            }
+        };
+
+        const handleEntry = async () => {
+            if (!isAuthReady || !db) return;
+
+            const selectedTeam = teamSelectEl.value;
+            if (!selectedTeam) {
+                console.error("Please select a team.");
+                return;
+            }
+            console.log("Attempting to log entry for team:", selectedTeam);
+            try {
+                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                await addDoc(collection(db, logsCollectionPath), {
+                    teamName: selectedTeam,
+                    event: 'Entry',
+                    runNumber: null,
+                    timestamp: serverTimestamp(),
+                    userId: userId
+                });
+                console.log("Entry logged successfully.");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
+        };
+
+        const handleLogRun = async () => {
+            if (!isAuthReady || !db) return;
+
+            const selectedTeam = teamSelectEl.value;
+            const selectedEvent = eventSelectEl.value;
+            const runNumber = parseInt(runNumberSelect.value, 10);
+
+            if (!selectedTeam || !selectedEvent || isNaN(runNumber)) {
+                console.error("Please select a team, an event, and a valid run number.");
+                return;
+            }
+            console.log("Attempting to log run for team:", selectedTeam, "event:", selectedEvent, "run number:", runNumber);
+            try {
+                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                await addDoc(collection(db, logsCollectionPath), {
+                    teamName: selectedTeam,
+                    event: selectedEvent,
+                    runNumber: runNumber,
+                    timestamp: serverTimestamp(),
+                    userId: userId
+                });
+                console.log("Run time logged successfully.");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
+        };
+
+        const handleDownloadCSV = async () => {
+            if (!isAuthReady || !db) return;
+
+            try {
+                const logsCollectionPath = `/artifacts/${appId}/public/data/${logCollectionName}`;
+                const q = query(collection(db, logsCollectionPath));
+                const querySnapshot = await getDocs(q);
+
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Team,Event,Run Number,Timestamp\n";
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const teamName = data.teamName || 'N/A';
+                    const event = data.event || 'N/A';
+                    const runNumber = data.runNumber !== null ? data.runNumber : 'N/A';
+                    const timestamp = data.timestamp?.toDate ? data.timestamp.toDate().toLocaleString() : 'N/A';
+                    csvContent += `"${teamName}","${event}","${runNumber}","${timestamp}"\n`;
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `track_log_${new Date().toISOString()}.csv`);
+                document.body.appendChild(link); // Required for Firefox
+                link.click();
+                document.body.removeChild(link);
+            } catch (e) {
+                console.error("Error downloading CSV: ", e);
+            }
+        };
+
+        // Event Listeners
+        entryBtn.addEventListener('click', handleEntry);
+        logRunBtn.addEventListener('click', handleLogRun);
+        downloadBtn.addEventListener('click', handleDownloadCSV);
+
+        // Initialize the app
+        initFirebase();
+    </script>
+</body>
+</html>
